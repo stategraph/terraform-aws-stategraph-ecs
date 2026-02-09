@@ -36,8 +36,8 @@ resource "aws_secretsmanager_secret" "database" {
 resource "aws_secretsmanager_secret_version" "database" {
   secret_id = aws_secretsmanager_secret.database.id
   secret_string = jsonencode({
-    username = var.create_database ? var.database_username : var.external_database_username
-    password = var.create_database ? random_password.database.result : var.external_database_password
+    username = var.create_database ? var.database_username : nonsensitive(var.external_database_username)
+    password = var.create_database ? random_password.database.result : nonsensitive(var.external_database_password)
   })
 }
 
@@ -62,7 +62,7 @@ resource "aws_secretsmanager_secret_version" "oauth" {
   secret_id = aws_secretsmanager_secret.oauth[0].id
   secret_string = jsonencode({
     client_id     = var.oauth_client_id
-    client_secret = var.oauth_client_secret
+    client_secret = nonsensitive(var.oauth_client_secret)
   })
 }
 

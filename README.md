@@ -23,7 +23,7 @@ Deploy Stategraph on AWS ECS Fargate with a complete, production-ready infrastru
 
 ```hcl
 module "stategraph" {
-  source = "github.com/stategraph/stategraph//terraform/aws-ecs?ref=v1.0.0"
+  source = "github.com/stategraph/terraform-aws-stategraph-ecs?ref=v1.0.0"
 
   # Network configuration (required)
   vpc_id             = "vpc-xxxxx"

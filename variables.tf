@@ -250,7 +250,6 @@ variable "oauth_client_id" {
   description = "OAuth client ID"
   type        = string
   default     = ""
-  sensitive   = true
 }
 
 variable "oauth_client_secret" {
