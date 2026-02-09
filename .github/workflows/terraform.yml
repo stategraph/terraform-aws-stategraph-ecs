@@ -14,27 +14,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
         with:
-          terraform_version: 1.6.0
+          tofu_version: 1.6.0
 
       - name: Terraform Format Check
-        run: terraform fmt -check -recursive
+        run: tofu fmt -check -recursive
 
       - name: Terraform Init
-        run: terraform init -backend=false
+        run: tofu init -backend=false
 
       - name: Terraform Validate
-        run: terraform validate
+        run: tofu validate
 
       - name: Validate Examples
         run: |
           for example in examples/*/; do
             echo "Validating $example"
             cd "$example"
-            terraform init -backend=false
-            terraform validate
+            tofu init -backend=false
+            tofu validate
             cd -
           done
 
