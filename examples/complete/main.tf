@@ -47,10 +47,10 @@ module "vpc" {
 
 # Stategraph ECS Module - Deploys the application
 module "stategraph" {
-  source = "stategraph/stategraph-ecs/aws"
-  # version = "~> 1.0"  # Uncomment to pin to specific version
+  source  = "stategraph/stategraph-ecs/aws"
+  version = "~> 1.0"
 
-  # For local development:
+  # For local development, comment out the above and use:
   # source = "../../"
 
   # Network configuration
