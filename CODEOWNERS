@@ -1,0 +1,14 @@
+# Default owners for everything in the repo
+* @stategraph/platform
+
+# Terraform module owners
+*.tf @stategraph/platform @stategraph/infrastructure
+
+# Documentation
+*.md @stategraph/docs @stategraph/platform
+
+# Examples
+/examples/ @stategraph/platform
+
+# CI/CD
+/.github/ @stategraph/platform

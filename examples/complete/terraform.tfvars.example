@@ -1,0 +1,57 @@
+# AWS Configuration
+aws_region  = "us-east-1"
+environment = "production"
+
+# Domain Configuration (REQUIRED)
+domain_name     = "stategraph.example.com"
+certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Optional: Route53 Configuration
+# Uncomment to automatically create DNS records
+# route53_zone_id = "Z1234567890ABC"
+
+# VPC Configuration (adjust as needed)
+vpc_cidr             = "10.0.0.0/16"
+private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+public_subnet_cidrs  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+# ECS Configuration
+ecs_task_cpu       = 1024  # 1 vCPU
+ecs_task_memory    = 2048  # 2GB
+ecs_desired_count  = 2
+enable_autoscaling = true
+ecs_max_count      = 4
+ecs_min_count      = 1
+
+# Stategraph Image (use specific version in production)
+stategraph_image = "ghcr.io/stategraph/stategraph-server:latest"
+
+# Database Configuration
+database_instance_class          = "db.t3.medium"
+database_multi_az                = true
+database_backup_retention_period = 7
+database_allocated_storage       = 100
+
+# OAuth Configuration (optional)
+oauth_enabled = false
+# oauth_provider      = "google"  # or "github" or "oidc"
+# oauth_client_id     = "your-client-id"
+# oauth_client_secret = "your-client-secret"
+# oauth_issuer_url    = "https://accounts.google.com"  # for OIDC
+
+# Monitoring
+log_retention_days = 7
+
+# Security
+enable_deletion_protection = true
+
+# For development environments, use these cost-optimized settings:
+# environment                      = "development"
+# ecs_desired_count                = 1
+# ecs_task_cpu                     = 512
+# ecs_task_memory                  = 1024
+# database_instance_class          = "db.t3.micro"
+# database_multi_az                = false
+# enable_autoscaling               = false
+# enable_deletion_protection       = false
+# database_backup_retention_period = 1
