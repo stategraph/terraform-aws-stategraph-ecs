@@ -13,26 +13,26 @@ resource "aws_security_group" "alb" {
   )
 }
 
-# Allow HTTP traffic from internet
+# Allow HTTP traffic from var.alb_ingress_cidr (default 0.0.0.0/0)
 resource "aws_vpc_security_group_ingress_rule" "alb_http" {
   security_group_id = aws_security_group.alb.id
-  description       = "Allow HTTP from internet"
+  description       = "Allow HTTP"
 
   from_port   = 80
   to_port     = 80
   ip_protocol = "tcp"
-  cidr_ipv4   = "0.0.0.0/0"
+  cidr_ipv4   = var.alb_ingress_cidr
 }
 
-# Allow HTTPS traffic from internet
+# Allow HTTPS traffic from var.alb_ingress_cidr (default 0.0.0.0/0)
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
   security_group_id = aws_security_group.alb.id
-  description       = "Allow HTTPS from internet"
+  description       = "Allow HTTPS"
 
   from_port   = 443
   to_port     = 443
   ip_protocol = "tcp"
-  cidr_ipv4   = "0.0.0.0/0"
+  cidr_ipv4   = var.alb_ingress_cidr
 }
 
 # Allow all outbound traffic from ALB

@@ -209,6 +209,18 @@ variable "alb_idle_timeout" {
   default     = 60
 }
 
+variable "alb_internal" {
+  description = "Create an internal (scheme: internal) ALB instead of an internet-facing one. Defaults to false, matching previous behaviour. Pass private subnets as public_subnet_ids when true."
+  type        = bool
+  default     = false
+}
+
+variable "alb_ingress_cidr" {
+  description = "CIDR allowed to reach the ALB on ports 80 and 443. Defaults to 0.0.0.0/0, matching previous behaviour. Scope this to a VPC or office CIDR for a non-public deployment."
+  type        = string
+  default     = "0.0.0.0/0"
+}
+
 variable "enable_deletion_protection" {
   description = "Enable deletion protection for ALB"
   type        = bool

@@ -131,7 +131,7 @@ resource "aws_db_instance" "stategraph" {
 # Application Load Balancer
 resource "aws_lb" "stategraph" {
   name               = "stategraph-${var.environment}"
-  internal           = false
+  internal           = var.alb_internal
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = var.public_subnet_ids
