@@ -60,6 +60,12 @@ variable "database_multi_az" {
   default     = true
 }
 
+variable "database_deletion_protection" {
+  description = "Enable deletion protection on the managed RDS instance. Defaults to false to preserve existing behaviour; true is recommended for anything holding real state."
+  type        = bool
+  default     = false
+}
+
 variable "database_backup_retention_period" {
   description = "Backup retention period in days"
   type        = number

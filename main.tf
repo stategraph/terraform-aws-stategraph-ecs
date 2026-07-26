@@ -104,6 +104,11 @@ resource "aws_db_instance" "stategraph" {
   db_subnet_group_name   = aws_db_subnet_group.stategraph[0].name
   vpc_security_group_ids = [aws_security_group.rds[0].id]
 
+  # This instance holds the Terraform state for everything the operator
+  # manages; make it possible to guard it against an accidental destroy.
+  deletion_protection = var.database_deletion_protection
+
+  copy_tags_to_snapshot   = true
   backup_retention_period = var.database_backup_retention_period
   backup_window           = "03:00-04:00"
   maintenance_window      = "mon:04:00-mon:05:00"
@@ -138,6 +143,7 @@ resource "aws_lb" "stategraph" {
 
   enable_deletion_protection = var.enable_deletion_protection
   idle_timeout               = var.alb_idle_timeout
+  drop_invalid_header_fields = true
 
   dynamic "access_logs" {
     for_each = var.alb_access_logs_enabled ? [1] : []
@@ -267,10 +273,21 @@ resource "aws_ecs_task_definition" "stategraph" {
     image     = var.stategraph_image
     essential = true
 
+    # hostPort and the three empty collections below are set explicitly to the
+    # values ECS materializes server-side. Without them the provider diffs this
+    # rendered JSON against AWS's normalized copy and reports four deletions on
+    # every plan, which hides real task-definition changes. Under awsvpc (this
+    # module hardcodes it, along with Fargate) hostPort always equals
+    # containerPort, and the unused collections default to [].
     portMappings = [{
       containerPort = var.container_port
+      hostPort      = var.container_port
       protocol      = "tcp"
     }]
+
+    mountPoints    = []
+    systemControls = []
+    volumesFrom    = []
 
     environment = concat([
       {
