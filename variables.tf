@@ -42,6 +42,12 @@ variable "database_instance_class" {
   default     = "db.t3.medium"
 }
 
+variable "database_engine_version" {
+  description = "PostgreSQL engine version for the managed RDS instance. Prefer a major-only value (e.g. \"17\") — RDS retires specific minors for new creates, and engine_version is in ignore_changes so auto minor upgrades do not plan a downgrade."
+  type        = string
+  default     = "17"
+}
+
 variable "database_allocated_storage" {
   description = "Allocated storage for RDS in GB"
   type        = number
@@ -173,9 +179,21 @@ variable "container_port" {
 }
 
 variable "health_check_path" {
-  description = "Health check path for the application"
+  description = "Health check path for the application (used by the ALB target group)"
   type        = string
   default     = "/api/v1/health"
+}
+
+variable "container_health_check_path" {
+  description = "Path for the ECS container health check. Defaults to var.health_check_path when null. Set this to a liveness path when health_check_path gates on readiness, so ECS does not kill tasks that are still running DB migrations."
+  type        = string
+  default     = null
+}
+
+variable "health_check_grace_period_seconds" {
+  description = "Seconds ECS ignores ALB health-check failures after a task starts. Must exceed worst-case first-boot DB migration time when health_check_path gates on readiness."
+  type        = number
+  default     = 600
 }
 
 variable "health_check_interval" {

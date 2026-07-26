@@ -4,6 +4,9 @@ data "aws_region" "current" {}
 resource "random_password" "database" {
   length  = 32
   special = true
+  # RDS rejects '@', '/', '"' and spaces in master passwords, so the default
+  # special set fails at create time whenever one of them is drawn.
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 # CloudWatch Log Group for ECS container logs
@@ -86,10 +89,15 @@ resource "aws_db_subnet_group" "stategraph" {
 resource "aws_db_instance" "stategraph" {
   count = var.create_database ? 1 : 0
 
-  identifier     = "stategraph-${var.environment}"
-  engine         = "postgres"
-  engine_version = "16.3"
-  instance_class = var.database_instance_class
+  identifier = "stategraph-${var.environment}"
+  engine     = "postgres"
+  # Major-only pin: RDS stops offering specific minors for new creates over
+  # time (16.3 is already gone), so a minor pin eventually breaks fresh
+  # installs. Paired with auto_minor_version_upgrade + the ignore_changes
+  # below so a patched instance doesn't plan a downgrade on the next apply.
+  engine_version             = var.database_engine_version
+  auto_minor_version_upgrade = true
+  instance_class             = var.database_instance_class
 
   allocated_storage     = var.database_allocated_storage
   max_allocated_storage = var.database_max_allocated_storage
@@ -123,7 +131,10 @@ resource "aws_db_instance" "stategraph" {
 
   lifecycle {
     ignore_changes = [
-      final_snapshot_identifier
+      final_snapshot_identifier,
+      # auto_minor_version_upgrade moves the running version; without this a
+      # major-only pin plans a downgrade after every maintenance window.
+      engine_version,
     ]
   }
 }
@@ -330,7 +341,11 @@ resource "aws_ecs_task_definition" "stategraph" {
     }
 
     healthCheck = {
-      command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
+      # Decoupled from var.health_check_path: that path is the ALB's, and an
+      # ALB path that gates on readiness (DB migrations, dependencies) makes
+      # ECS kill the task once startPeriod lapses. Defaults to the ALB path so
+      # behaviour is unchanged when the new variable is unset.
+      command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${coalesce(var.container_health_check_path, var.health_check_path)} || exit 1"]
       interval    = var.health_check_interval
       timeout     = var.health_check_timeout
       retries     = var.health_check_unhealthy_threshold
@@ -366,6 +381,11 @@ resource "aws_ecs_service" "stategraph" {
     container_name   = "stategraph"
     container_port   = var.container_port
   }
+
+  # Without a grace period ECS starts counting ALB health-check failures
+  # immediately; combined with the circuit breaker below, a first-boot DB
+  # migration that outlasts the first few probes gets rolled back in a loop.
+  health_check_grace_period_seconds = var.health_check_grace_period_seconds
 
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
