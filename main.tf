@@ -1,28 +1,111 @@
 data "aws_region" "current" {}
 
-# Generate random password for database
-resource "random_password" "database" {
-  length  = 32
-  special = true
-}
+locals {
+  name = "stategraph-${var.environment}"
 
-# CloudWatch Log Group for ECS container logs
-resource "aws_cloudwatch_log_group" "stategraph" {
-  name              = "/ecs/stategraph-${var.environment}"
-  retention_in_days = var.log_retention_days
+  # nginx inside the image listens on 8080.
+  container_port = 8080
+
+  scheme  = var.certificate_arn != null ? "https" : "http"
+  host    = coalesce(var.domain_name, aws_lb.stategraph.dns_name)
+  ui_base = "${local.scheme}://${local.host}"
+
+  db_host = var.create_database ? aws_db_instance.stategraph[0].address : var.external_database_host
+  db_port = var.create_database ? aws_db_instance.stategraph[0].port : var.external_database_port
+  db_name = var.create_database ? aws_db_instance.stategraph[0].db_name : var.external_database_name
+
+  license_key_set = nonsensitive(var.license_key != null)
 
   tags = merge(
     var.tags,
     {
-      Name        = "stategraph-${var.environment}"
+      Name        = local.name
       Environment = var.environment
     }
   )
+
+  container_environment = concat(
+    [
+      { name = "STATEGRAPH_UI_BASE", value = local.ui_base },
+      { name = "STATEGRAPH_OAUTH_REDIRECT_BASE", value = local.ui_base },
+      { name = "DB_HOST", value = local.db_host },
+      { name = "DB_PORT", value = tostring(local.db_port) },
+      { name = "DB_NAME", value = local.db_name },
+    ],
+    var.oauth_enabled ? [
+      { name = "STATEGRAPH_OAUTH_TYPE", value = var.oauth_provider },
+      { name = "STATEGRAPH_OAUTH_CLIENT_ID", value = var.oauth_client_id },
+    ] : [],
+    var.oauth_enabled && var.oauth_provider == "oidc" ? [
+      { name = "STATEGRAPH_OAUTH_OIDC_ISSUER_URL", value = var.oauth_issuer_url },
+    ] : [],
+    var.oauth_enabled && var.oauth_email_domain != null ? [
+      { name = "STATEGRAPH_OAUTH_EMAIL_DOMAIN", value = var.oauth_email_domain },
+    ] : [],
+    var.oauth_enabled && var.oauth_display_name != null ? [
+      { name = "STATEGRAPH_OAUTH_DISPLAY_NAME", value = var.oauth_display_name },
+    ] : [],
+    var.cost_enabled ? [
+      { name = "STATEGRAPH_COST_ENABLED", value = "true" },
+      { name = "PRICING_DB_HOST", value = local.db_host },
+      { name = "PRICING_DB_PORT", value = tostring(local.db_port) },
+      { name = "PRICING_DB_NAME", value = "cloud_pricing" },
+      { name = "PRICING_DB_SSLMODE", value = "require" },
+    ] : [],
+    var.security_scanning_enabled ? [
+      { name = "STATEGRAPH_SECURITY", value = "1" },
+    ] : [],
+    var.extra_environment,
+  )
+
+  container_secrets = concat(
+    [
+      { name = "DB_USER", valueFrom = "${aws_secretsmanager_secret.database.arn}:username::" },
+      { name = "DB_PASS", valueFrom = "${aws_secretsmanager_secret.database.arn}:password::" },
+      { name = "STATEGRAPH_OAUTH_COOKIE_SECRET", valueFrom = "${aws_secretsmanager_secret.stategraph.arn}:cookie_secret::" },
+    ],
+    local.license_key_set ? [
+      { name = "STATEGRAPH_LICENSE_KEY", valueFrom = "${aws_secretsmanager_secret.stategraph.arn}:license_key::" },
+    ] : [],
+    var.oauth_enabled ? [
+      { name = "STATEGRAPH_OAUTH_CLIENT_SECRET", valueFrom = "${aws_secretsmanager_secret.stategraph.arn}:oauth_client_secret::" },
+    ] : [],
+    var.cost_enabled ? [
+      { name = "PRICING_DB_USER", valueFrom = "${aws_secretsmanager_secret.database.arn}:username::" },
+      { name = "PRICING_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.database.arn}:password::" },
+    ] : [],
+    [for s in var.extra_secrets : { name = s.name, valueFrom = s.value_from }],
+  )
+
+  # The secret ARN without a :json-key:: suffix, for the execution role policy.
+  extra_secret_arns = distinct([
+    for s in var.extra_secrets : join(":", slice(split(":", s.value_from), 0, 7))
+  ])
 }
 
-# Secrets Manager - Database credentials
+# RDS rejects /, @, " and space in a master password.
+resource "random_password" "database" {
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+resource "random_password" "cookie_secret" {
+  length  = 32
+  special = false
+}
+
+resource "aws_cloudwatch_log_group" "stategraph" {
+  name              = "/ecs/${local.name}"
+  retention_in_days = var.log_retention_days
+
+  tags = local.tags
+}
+
+# Database credentials
 resource "aws_secretsmanager_secret" "database" {
-  name = "stategraph-database-${var.environment}"
+  name                    = "stategraph-database-${var.environment}"
+  recovery_window_in_days = var.secrets_recovery_window_in_days
 
   tags = merge(
     var.tags,
@@ -36,60 +119,52 @@ resource "aws_secretsmanager_secret" "database" {
 resource "aws_secretsmanager_secret_version" "database" {
   secret_id = aws_secretsmanager_secret.database.id
   secret_string = jsonencode({
-    username = var.create_database ? var.database_username : nonsensitive(var.external_database_username)
-    password = var.create_database ? random_password.database.result : nonsensitive(var.external_database_password)
+    username = var.create_database ? var.database_username : var.external_database_username
+    password = var.create_database ? random_password.database.result : var.external_database_password
   })
 }
 
-# Secrets Manager - OAuth credentials (if enabled)
-resource "aws_secretsmanager_secret" "oauth" {
-  count = var.oauth_enabled ? 1 : 0
-
-  name = "stategraph-oauth-${var.environment}"
+# Server secrets: cookie secret, license key, OAuth client secret
+resource "aws_secretsmanager_secret" "stategraph" {
+  name                    = "stategraph-server-${var.environment}"
+  recovery_window_in_days = var.secrets_recovery_window_in_days
 
   tags = merge(
     var.tags,
     {
-      Name        = "stategraph-oauth-${var.environment}"
+      Name        = "stategraph-server-${var.environment}"
       Environment = var.environment
     }
   )
 }
 
-resource "aws_secretsmanager_secret_version" "oauth" {
-  count = var.oauth_enabled ? 1 : 0
-
-  secret_id = aws_secretsmanager_secret.oauth[0].id
-  secret_string = jsonencode({
-    client_id     = var.oauth_client_id
-    client_secret = nonsensitive(var.oauth_client_secret)
-  })
+resource "aws_secretsmanager_secret_version" "stategraph" {
+  secret_id = aws_secretsmanager_secret.stategraph.id
+  secret_string = jsonencode(merge(
+    { cookie_secret = coalesce(var.oauth_cookie_secret, random_password.cookie_secret.result) },
+    local.license_key_set ? { license_key = var.license_key } : {},
+    var.oauth_enabled ? { oauth_client_secret = var.oauth_client_secret } : {},
+  ))
 }
 
-# RDS Subnet Group (only if using managed RDS)
+# RDS
 resource "aws_db_subnet_group" "stategraph" {
   count = var.create_database ? 1 : 0
 
-  name       = "stategraph-${var.environment}"
+  name       = local.name
   subnet_ids = var.private_subnet_ids
 
-  tags = merge(
-    var.tags,
-    {
-      Name        = "stategraph-${var.environment}"
-      Environment = var.environment
-    }
-  )
+  tags = local.tags
 }
 
-# RDS PostgreSQL Instance (only if using managed RDS)
 resource "aws_db_instance" "stategraph" {
   count = var.create_database ? 1 : 0
 
-  identifier     = "stategraph-${var.environment}"
-  engine         = "postgres"
-  engine_version = "16.3"
-  instance_class = var.database_instance_class
+  identifier                 = local.name
+  engine                     = "postgres"
+  engine_version             = var.database_engine_version
+  auto_minor_version_upgrade = true
+  instance_class             = var.database_instance_class
 
   allocated_storage     = var.database_allocated_storage
   max_allocated_storage = var.database_max_allocated_storage
@@ -104,22 +179,18 @@ resource "aws_db_instance" "stategraph" {
   db_subnet_group_name   = aws_db_subnet_group.stategraph[0].name
   vpc_security_group_ids = [aws_security_group.rds[0].id]
 
+  deletion_protection     = var.database_deletion_protection
+  copy_tags_to_snapshot   = true
   backup_retention_period = var.database_backup_retention_period
   backup_window           = "03:00-04:00"
   maintenance_window      = "mon:04:00-mon:05:00"
 
-  skip_final_snapshot       = false
-  final_snapshot_identifier = "stategraph-${var.environment}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  skip_final_snapshot       = var.database_skip_final_snapshot
+  final_snapshot_identifier = var.database_skip_final_snapshot ? null : "${local.name}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
-  tags = merge(
-    var.tags,
-    {
-      Name        = "stategraph-${var.environment}"
-      Environment = var.environment
-    }
-  )
+  tags = local.tags
 
   lifecycle {
     ignore_changes = [
@@ -130,14 +201,15 @@ resource "aws_db_instance" "stategraph" {
 
 # Application Load Balancer
 resource "aws_lb" "stategraph" {
-  name               = "stategraph-${var.environment}"
-  internal           = false
+  name               = local.name
+  internal           = var.alb_internal
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = var.public_subnet_ids
 
   enable_deletion_protection = var.enable_deletion_protection
   idle_timeout               = var.alb_idle_timeout
+  drop_invalid_header_fields = true
 
   dynamic "access_logs" {
     for_each = var.alb_access_logs_enabled ? [1] : []
@@ -148,19 +220,24 @@ resource "aws_lb" "stategraph" {
     }
   }
 
-  tags = merge(
-    var.tags,
-    {
-      Name        = "stategraph-${var.environment}"
-      Environment = var.environment
+  tags = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = var.certificate_arn == null || var.domain_name != null
+      error_message = "certificate_arn requires domain_name: the certificate must match the host name users open."
     }
-  )
+
+    precondition {
+      condition     = !var.alb_access_logs_enabled || var.alb_access_logs_bucket != ""
+      error_message = "alb_access_logs_bucket is required when alb_access_logs_enabled is true."
+    }
+  }
 }
 
-# ALB Target Group
 resource "aws_lb_target_group" "stategraph" {
-  name        = "stategraph-${var.environment}"
-  port        = var.container_port
+  name        = local.name
+  port        = local.container_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
@@ -179,17 +256,12 @@ resource "aws_lb_target_group" "stategraph" {
 
   deregistration_delay = 30
 
-  tags = merge(
-    var.tags,
-    {
-      Name        = "stategraph-${var.environment}"
-      Environment = var.environment
-    }
-  )
+  tags = local.tags
 }
 
-# ALB Listener - HTTPS
 resource "aws_lb_listener" "https" {
+  count = var.certificate_arn != null ? 1 : 0
+
   load_balancer_arn = aws_lb.stategraph.arn
   port              = 443
   protocol          = "HTTPS"
@@ -210,18 +282,23 @@ resource "aws_lb_listener" "https" {
   )
 }
 
-# ALB Listener - HTTP (redirect to HTTPS)
+# HTTP: redirect to HTTPS when a certificate is set, forward otherwise.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.stategraph.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
-    type = "redirect"
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+    type             = var.certificate_arn != null ? "redirect" : "forward"
+    target_group_arn = var.certificate_arn != null ? null : aws_lb_target_group.stategraph.arn
+
+    dynamic "redirect" {
+      for_each = var.certificate_arn != null ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
     }
   }
 
@@ -234,27 +311,20 @@ resource "aws_lb_listener" "http" {
   )
 }
 
-# ECS Cluster
+# ECS
 resource "aws_ecs_cluster" "stategraph" {
-  name = "stategraph-${var.environment}"
+  name = local.name
 
   setting {
     name  = "containerInsights"
     value = "enabled"
   }
 
-  tags = merge(
-    var.tags,
-    {
-      Name        = "stategraph-${var.environment}"
-      Environment = var.environment
-    }
-  )
+  tags = local.tags
 }
 
-# ECS Task Definition
 resource "aws_ecs_task_definition" "stategraph" {
-  family                   = "stategraph-${var.environment}"
+  family                   = local.name
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.ecs_task_cpu
@@ -262,98 +332,77 @@ resource "aws_ecs_task_definition" "stategraph" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = var.cpu_architecture
+  }
+
+  # hostPort and the empty collections match what ECS stores, so plans stay quiet.
   container_definitions = jsonencode([{
-    name      = "stategraph"
-    image     = var.stategraph_image
-    essential = true
+    name        = "stategraph"
+    image       = var.stategraph_image
+    essential   = true
+    stopTimeout = var.container_stop_timeout
 
     portMappings = [{
-      containerPort = var.container_port
+      containerPort = local.container_port
+      hostPort      = local.container_port
       protocol      = "tcp"
     }]
 
-    environment = concat([
-      {
-        name  = "STATEGRAPH_UI_BASE"
-        value = "https://${var.domain_name}"
-      },
-      {
-        name  = "DB_HOST"
-        value = var.create_database ? aws_db_instance.stategraph[0].address : var.external_database_host
-      },
-      {
-        name  = "DB_PORT"
-        value = tostring(var.create_database ? 5432 : var.external_database_port)
-      },
-      {
-        name  = "DB_NAME"
-        value = var.create_database ? aws_db_instance.stategraph[0].db_name : var.external_database_name
-      }
-      ], var.oauth_enabled ? [
-      {
-        name  = "OAUTH_PROVIDER"
-        value = var.oauth_provider
-      },
-      {
-        name  = "OAUTH_CLIENT_ID"
-        value = var.oauth_client_id
-      },
-      {
-        name  = "OAUTH_ISSUER_URL"
-        value = var.oauth_issuer_url
-      }
-    ] : [])
+    mountPoints    = []
+    systemControls = []
+    volumesFrom    = []
 
-    secrets = concat([
-      {
-        name      = "DB_USER"
-        valueFrom = "${aws_secretsmanager_secret.database.arn}:username::"
-      },
-      {
-        name      = "DB_PASS"
-        valueFrom = "${aws_secretsmanager_secret.database.arn}:password::"
-      }
-      ], var.oauth_enabled ? [
-      {
-        name      = "OAUTH_CLIENT_SECRET"
-        valueFrom = "${aws_secretsmanager_secret.oauth[0].arn}:client_secret::"
-      }
-    ] : [])
+    environment = local.container_environment
+    secrets     = local.container_secrets
 
     logConfiguration = {
       logDriver = "awslogs"
       options = {
         "awslogs-group"         = aws_cloudwatch_log_group.stategraph.name
-        "awslogs-region"        = data.aws_region.current.id
+        "awslogs-region"        = data.aws_region.current.region
         "awslogs-stream-prefix" = "ecs"
       }
     }
 
     healthCheck = {
-      command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
+      command     = ["CMD-SHELL", "curl -f http://localhost:${local.container_port}${var.container_health_check_path} || exit 1"]
       interval    = var.health_check_interval
       timeout     = var.health_check_timeout
       retries     = var.health_check_unhealthy_threshold
-      startPeriod = 60
+      startPeriod = var.container_health_check_start_period
     }
   }])
 
-  tags = merge(
-    var.tags,
-    {
-      Name        = "stategraph-${var.environment}"
-      Environment = var.environment
+  tags = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = !var.oauth_enabled || contains(["google", "oidc"], var.oauth_provider)
+      error_message = "oauth_provider must be google or oidc when oauth_enabled is true."
     }
-  )
+
+    precondition {
+      condition     = !var.oauth_enabled || var.oauth_provider != "oidc" || var.oauth_issuer_url != ""
+      error_message = "oauth_issuer_url is required when oauth_provider is oidc."
+    }
+
+    precondition {
+      condition     = var.create_database || (var.external_database_host != "" && var.external_database_name != "")
+      error_message = "external_database_host and external_database_name are required when create_database is false."
+    }
+  }
 }
 
-# ECS Service
 resource "aws_ecs_service" "stategraph" {
-  name            = "stategraph-${var.environment}"
+  name            = local.name
   cluster         = aws_ecs_cluster.stategraph.id
   task_definition = aws_ecs_task_definition.stategraph.arn
   desired_count   = var.ecs_desired_count
   launch_type     = "FARGATE"
+
+  health_check_grace_period_seconds = var.health_check_grace_period_seconds
 
   network_configuration {
     subnets          = var.private_subnet_ids
@@ -364,7 +413,7 @@ resource "aws_ecs_service" "stategraph" {
   load_balancer {
     target_group_arn = aws_lb_target_group.stategraph.arn
     container_name   = "stategraph"
-    container_port   = var.container_port
+    container_port   = local.container_port
   }
 
   deployment_maximum_percent         = 200
@@ -375,26 +424,19 @@ resource "aws_ecs_service" "stategraph" {
     rollback = true
   }
 
-  # Wait for ALB to be ready before deploying tasks
   depends_on = [
     aws_lb_listener.https,
     aws_lb_listener.http
   ]
 
-  tags = merge(
-    var.tags,
-    {
-      Name        = "stategraph-${var.environment}"
-      Environment = var.environment
-    }
-  )
+  tags = local.tags
 
   lifecycle {
     ignore_changes = [desired_count]
   }
 }
 
-# Auto Scaling Target (if autoscaling enabled)
+# Autoscaling
 resource "aws_appautoscaling_target" "ecs" {
   count = var.enable_autoscaling ? 1 : 0
 
@@ -405,7 +447,6 @@ resource "aws_appautoscaling_target" "ecs" {
   service_namespace  = "ecs"
 }
 
-# Auto Scaling Policy - CPU
 resource "aws_appautoscaling_policy" "ecs_cpu" {
   count = var.enable_autoscaling ? 1 : 0
 
@@ -425,7 +466,6 @@ resource "aws_appautoscaling_policy" "ecs_cpu" {
   }
 }
 
-# Auto Scaling Policy - Memory
 resource "aws_appautoscaling_policy" "ecs_memory" {
   count = var.enable_autoscaling ? 1 : 0
 

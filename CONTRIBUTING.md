@@ -2,12 +2,13 @@
 
 Thank you for your interest in contributing to the Stategraph ECS Terraform module!
 
-## Development Setup
+## Development setup
 
-1. **Prerequisites**
-   - Terraform 1.0+
-   - AWS CLI configured
-   - Git
+1. **Tools**
+   - [OpenTofu](https://opentofu.org/docs/intro/install/) 1.6 or later, or Terraform 1.7 or later
+   - [TFLint](https://github.com/terraform-linters/tflint)
+   - [terraform-docs](https://terraform-docs.io/user-guide/installation/)
+   - AWS CLI, for changes you test against an account
 
 2. **Clone the repository**
    ```bash
@@ -15,16 +16,24 @@ Thank you for your interest in contributing to the Stategraph ECS Terraform modu
    cd terraform-aws-stategraph-ecs
    ```
 
-3. **Install development tools**
+3. **Run the checks**
    ```bash
-   # TFLint
-   curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-
-   # terraform-docs
-   go install github.com/terraform-docs/terraform-docs@latest
+   make check
    ```
 
-## Making Changes
+   `make check` runs, in order:
+
+   | Target | What it does |
+   |--------|--------------|
+   | `fmt-check` | `tofu fmt -check -recursive` |
+   | `validate` | `tofu init` and `tofu validate` on the module and each example |
+   | `lint` | `tflint --recursive` |
+   | `docs-check` | Checks that the reference in README.md matches the variables and outputs |
+   | `test` | `tofu test`, with a mock AWS provider. No credentials needed |
+
+   Set `TOFU=terraform` to run the checks with Terraform.
+
+## Making changes
 
 1. **Create a branch**
    ```bash
@@ -33,98 +42,77 @@ Thank you for your interest in contributing to the Stategraph ECS Terraform modu
 
 2. **Make your changes**
    - Follow Terraform best practices
-   - Update documentation
-   - Add examples if introducing new features
+   - Add a test in `tests/` for a new variable or a changed container setting
+   - Update the example when you add a feature
 
-3. **Format and validate**
+3. **Format and regenerate the docs**
    ```bash
-   # Format code
-   terraform fmt -recursive
-
-   # Validate
-   terraform init -backend=false
-   terraform validate
-
-   # Run TFLint
-   tflint --recursive
+   make fmt
+   make docs
    ```
 
-4. **Update documentation**
+4. **Run the checks**
    ```bash
-   # Generate documentation
-   terraform-docs markdown table . > README.md
+   make check
    ```
 
-5. **Test your changes**
-   - Test in a real AWS account if possible
-   - Verify examples work
-   - Check that outputs are correct
+5. **Test against AWS when the change touches resources**
+   - Apply `examples/complete` in a test account
+   - Check `/health/live` and `/health/ready` on the URL from `terraform output stategraph_url`
+   - Destroy when done
 
-## Pull Request Process
+## Pull request process
 
 1. **Update CHANGELOG.md**
    - Add your changes under `[Unreleased]`
-   - Follow [Keep a Changelog](https://keepachangelog.com/) format
+   - Follow the [Keep a Changelog](https://keepachangelog.com/) format
 
-2. **Submit PR**
-   - Provide clear description of changes
-   - Reference any related issues
-   - Ensure CI checks pass
+2. **Submit the PR**
+   - Describe the change and reference related issues
+   - CI runs `make check`
 
-3. **Code Review**
+3. **Code review**
    - Address reviewer feedback
-   - Make requested changes
 
-## Coding Standards
+## Coding standards
 
-### Terraform Style
+### Terraform style
 
-- Use 2 spaces for indentation
-- Use snake_case for resource names and variables
-- Add descriptions to all variables and outputs
-- Use meaningful resource names
+- 2 spaces for indentation
+- snake_case for resource names and variables
+- A description on every variable and output
 - Group related resources together
 
 ### Documentation
 
-- Document all variables with:
-  - Clear description
-  - Type
-  - Default value (if applicable)
-  - Example usage
-- Document all outputs
-- Update examples when adding features
-- Keep README.md up to date
+- README.md holds the guide. The reference section between the terraform-docs markers is generated: run `make docs`
+- Update the example when you add a feature
 
-### Examples
+### Tests
 
-- Provide working examples
-- Use realistic variable values
-- Include comments explaining key decisions
-- Test examples before submitting
+- `tests/module.tftest.hcl` applies the module with a mock AWS provider and checks the resources it renders
+- Add a `run` block for a new feature, or an `assert` to an existing one
 
 ## Versioning
 
 This module follows [Semantic Versioning](https://semver.org/):
 
-- **MAJOR**: Incompatible API changes
-- **MINOR**: Backward-compatible functionality additions
-- **PATCH**: Backward-compatible bug fixes
+- **MAJOR**: incompatible changes to variables, defaults, or the server contract
+- **MINOR**: backward-compatible additions
+- **PATCH**: backward-compatible fixes
 
-## Release Process
+## Release process
 
 Releases are managed by maintainers:
 
-1. Update CHANGELOG.md
-2. Update version references in examples
-3. Create Git tag
-4. Publish to Terraform Registry (automated)
+1. Move the `[Unreleased]` entries in CHANGELOG.md under the new version
+2. Update the `ref` in the README and example module blocks
+3. Create the Git tag
 
 ## Questions?
 
 - Open an issue for bugs or feature requests
-- Join our [Slack community](https://stategraph.com/slack)
-- Email: support@stategraph.com
+- Documentation: https://stategraph.com/docs/admin/self-hosting/ecs
 
 ## License
 

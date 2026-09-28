@@ -1,260 +1,115 @@
 # Complete Stategraph ECS Deployment Example
 
-This example demonstrates a complete deployment of Stategraph on AWS ECS, including VPC creation.
+This example deploys Stategraph on AWS ECS with a new VPC. It uses the module from this repository, at `../../`.
 
-## What This Example Deploys
+## What this example deploys
 
-- **VPC**: New VPC with public and private subnets across 3 availability zones
-- **NAT Gateway**: For private subnet internet access (single NAT for dev, multi-NAT for prod)
-- **Stategraph ECS**: Complete application stack (ECS, RDS, ALB, security groups, IAM)
+- **VPC**: public and private subnets across 3 availability zones, with NAT gateways
+- **Stategraph**: the ECS service, the ALB, RDS PostgreSQL, the secrets, and the IAM roles from the module
+- **Route 53 record**: optional, when `route53_zone_id` is set
 
 ## Prerequisites
 
-1. **AWS Account** with appropriate permissions
-2. **Terraform** 1.0 or higher
-3. **ACM Certificate** for your domain in the deployment region
-4. **Domain Name** where Stategraph will be accessible
+1. An AWS account with permissions for ECS, RDS, ALB, IAM, Secrets Manager, CloudWatch, and VPC
+2. Terraform 1.3 or later, or OpenTofu
+3. A Stategraph Enterprise license key, or the intent to enter it on the setup screen
+4. For HTTPS: a domain name and an ACM certificate for it in the deployment region
 
-## Quick Start
+## Quick start
 
-### 1. Create ACM Certificate
+### 1. Request an ACM certificate
 
-Before deploying, create an SSL certificate in AWS Certificate Manager:
+Skip this step for an HTTP-only trial.
 
 ```bash
-# Request certificate (replace with your domain)
 aws acm request-certificate \
   --domain-name stategraph.example.com \
   --validation-method DNS \
   --region us-east-1
-
-# Note the CertificateArn from the output
 ```
 
-Follow AWS Console instructions to validate the certificate via DNS.
+Validate it through DNS as the AWS console instructs, and note its ARN.
 
-### 2. Configure Variables
-
-Copy the example variables file and customize it:
+### 2. Configure variables
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `terraform.tfvars` and set:
-- `domain_name`: Your domain (e.g., `stategraph.example.com`)
-- `certificate_arn`: ARN from step 1
-- Other settings as needed
+Set `domain_name` and `certificate_arn` in `terraform.tfvars`. Leave both unset for an HTTP-only trial on the ALB DNS name. Keep `terraform.tfvars` out of version control: it can hold the license key and the OAuth client secret.
 
 ### 3. Deploy
 
 ```bash
-# Initialize Terraform
 terraform init
-
-# Review the plan
 terraform plan
-
-# Deploy (takes ~10-15 minutes)
 terraform apply
 ```
 
+The apply takes 10 to 15 minutes.
+
 ### 4. Configure DNS
 
-After deployment, create a DNS record:
+Point your domain at the ALB, or set `route53_zone_id` and let the example create the alias record:
 
 ```bash
-# Get the ALB DNS name
 terraform output alb_dns_name
-
-# Create CNAME record pointing your domain to this DNS name
-# Or use Route53 alias record (recommended):
-# terraform output alb_zone_id
+terraform output alb_zone_id
 ```
 
-### 5. Access Stategraph
+### 5. Open Stategraph
 
-After DNS propagation (5-10 minutes), access Stategraph at:
+Wait for the first start, then open the console and create the first admin account:
 
-```
-https://your-domain.example.com
-```
-
-## Configuration Examples
-
-### Production Environment
-
-```hcl
-environment                      = "production"
-ecs_desired_count                = 2
-ecs_task_cpu                     = 1024
-ecs_task_memory                  = 2048
-database_instance_class          = "db.t3.medium"
-database_multi_az                = true
-enable_autoscaling               = true
-enable_deletion_protection       = true
-database_backup_retention_period = 7
+```bash
+curl -f "$(terraform output -raw stategraph_url)/health/ready"
+terraform output -raw stategraph_url
 ```
 
-**Estimated cost**: ~$190/month
+## Trial settings
 
-### Development Environment
+For a short trial, the values at the end of `terraform.tfvars.example` make the stack cheaper and easy to destroy: one small task, a single-AZ `db.t3.micro`, no deletion protection, no final snapshot, and secrets that Secrets Manager removes at once.
 
-```hcl
-environment                      = "development"
-ecs_desired_count                = 1
-ecs_task_cpu                     = 512
-ecs_task_memory                  = 1024
-database_instance_class          = "db.t3.micro"
-database_multi_az                = false
-enable_autoscaling               = false
-enable_deletion_protection       = false
-database_backup_retention_period = 1
-```
+## Using an existing VPC
 
-**Estimated cost**: ~$50/month
-
-### With OAuth Authentication
-
-```hcl
-oauth_enabled       = true
-oauth_provider      = "google"  # or "github" or "oidc"
-oauth_client_id     = var.oauth_client_id
-oauth_client_secret = var.oauth_client_secret
-
-# For OIDC:
-# oauth_issuer_url = "https://accounts.google.com"
-```
-
-**Note**: Store OAuth credentials in a separate `secrets.tfvars` file and add it to `.gitignore`.
-
-## Using Existing VPC
-
-If you already have a VPC, remove the VPC module and reference your existing resources:
+Remove the `vpc` module and pass your subnets to the `stategraph` module:
 
 ```hcl
 module "stategraph" {
-  source = "github.com/stategraph/stategraph//terraform/aws-ecs?ref=v1.0.0"
+  source = "github.com/stategraph/terraform-aws-stategraph-ecs?ref=v2.0.0"
 
-  vpc_id             = "vpc-xxxxx"  # Your existing VPC
+  vpc_id             = "vpc-xxxxx"
   private_subnet_ids = ["subnet-xxxxx", "subnet-yyyyy"]
   public_subnet_ids  = ["subnet-aaaaa", "subnet-bbbbb"]
 
-  # ... rest of configuration
+  # ...
 }
 ```
 
-## Automatic DNS with Route53
-
-Uncomment the `aws_route53_record` resource in `main.tf` and add to `terraform.tfvars`:
-
-```hcl
-route53_zone_id = "Z1234567890ABC"
-```
-
-Terraform will automatically create the DNS record.
-
 ## Monitoring
 
-### View Container Logs
-
 ```bash
-aws logs tail $(terraform output -raw cloudwatch_log_group) --follow
-```
+aws logs tail "$(terraform output -raw cloudwatch_log_group_name)" --follow
 
-### Check Service Health
-
-```bash
 aws ecs describe-services \
-  --cluster $(terraform output -raw ecs_cluster_name) \
-  --services $(terraform output -raw ecs_service_name)
-```
-
-### View RDS Metrics
-
-```bash
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/RDS \
-  --metric-name CPUUtilization \
-  --dimensions Name=DBInstanceIdentifier,Value=stategraph-production \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Average
+  --cluster "$(terraform output -raw ecs_cluster_name)" \
+  --services "$(terraform output -raw ecs_service_name)"
 ```
 
 ## Upgrading
 
-### Update Stategraph Version
-
-Edit `terraform.tfvars`:
-
-```hcl
-stategraph_image = "ghcr.io/stategraph/stategraph-server:v1.2.0"
-```
-
-Apply:
-
-```bash
-terraform apply
-```
-
-ECS performs a rolling deployment with zero downtime.
-
-## Troubleshooting
-
-### Tasks Not Starting
-
-Check ECS service events:
-
-```bash
-aws ecs describe-services \
-  --cluster $(terraform output -raw ecs_cluster_name) \
-  --services $(terraform output -raw ecs_service_name) \
-  --query 'services[0].events[0:5]'
-```
-
-### Database Connection Issues
-
-Verify security group rules:
-
-```bash
-terraform state show module.stategraph.aws_security_group.ecs
-terraform state show module.stategraph.aws_security_group.rds[0]
-```
-
-### ALB Health Checks Failing
-
-Check container logs:
-
-```bash
-aws logs tail $(terraform output -raw cloudwatch_log_group) --follow
-```
+Set `stategraph_image` in `terraform.tfvars` to the new tag and apply. ECS does a rolling deployment.
 
 ## Cleanup
-
-To destroy all resources:
 
 ```bash
 terraform destroy
 ```
 
-**Warning**: This will delete all data, including the database. Make sure you have backups.
+This deletes the database. With `database_skip_final_snapshot = false`, the default, RDS keeps a final snapshot.
 
-## Cost Optimization
+## Next steps
 
-- **Development**: Use single-AZ RDS, smaller instance types, disable autoscaling
-- **Production**: Use Multi-AZ RDS, enable autoscaling, configure backup retention
-- **All Environments**: Monitor CloudWatch metrics, right-size resources based on usage
-
-## Next Steps
-
-- Configure [gap analysis](https://stategraph.com/docs/features/gap-analysis)
-- Set up [Terraform state backend](https://www.terraform.io/docs/language/settings/backends/s3.html)
-- Enable [AWS WAF](https://aws.amazon.com/waf/) for application protection
-- Configure [CloudWatch alarms](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/AlarmThatSendsEmail.html)
-
-## Support
-
-- Documentation: https://stategraph.com/docs
-- Issues: https://github.com/stategraph/stategraph/issues
+- [Import your Terraform state](https://stategraph.com/docs/get-started/quickstart/import-state)
+- [Enable Orchestration](https://stategraph.com/docs/admin/self-hosting/orchestration)
+- [Gap analysis](https://stategraph.com/docs/infrastructure-as-a-database/query/gap-analysis)

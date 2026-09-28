@@ -1,52 +1,59 @@
-# AWS Configuration
+# AWS
 aws_region  = "us-east-1"
 environment = "production"
 
-# Domain Configuration (REQUIRED)
+# Domain. Leave both unset for an HTTP-only trial on the ALB DNS name.
 domain_name     = "stategraph.example.com"
 certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
-# Optional: Route53 Configuration
-# Uncomment to automatically create DNS records
+# Route 53. Set it to create the alias record for domain_name.
 # route53_zone_id = "Z1234567890ABC"
 
-# VPC Configuration (adjust as needed)
+# VPC
 vpc_cidr             = "10.0.0.0/16"
 private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 public_subnet_cidrs  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
 
-# ECS Configuration
-ecs_task_cpu       = 1024  # 1 vCPU
-ecs_task_memory    = 2048  # 2GB
+# Stategraph. Pin a release tag. The license key completes the first-time setup.
+stategraph_image = "ghcr.io/stategraph/stategraph-server:3.1.0"
+# license_key = "..."
+
+# Optional features
+cost_enabled              = false
+security_scanning_enabled = false
+
+# ECS
+ecs_task_cpu       = 1024 # 1 vCPU
+ecs_task_memory    = 2048 # 2 GB
+cpu_architecture   = "X86_64"
 ecs_desired_count  = 2
 enable_autoscaling = true
 ecs_max_count      = 4
 ecs_min_count      = 1
 
-# Stategraph Image (use specific version in production)
-stategraph_image = "ghcr.io/stategraph/stategraph-server:latest"
-
-# Database Configuration
+# Database
 database_instance_class          = "db.t3.medium"
 database_multi_az                = true
 database_backup_retention_period = 7
 database_allocated_storage       = 100
+database_deletion_protection     = true
+database_skip_final_snapshot     = false
 
-# OAuth Configuration (optional)
+# Sign-in. Local email and password sign-in is on when oauth_enabled is false.
 oauth_enabled = false
-# oauth_provider      = "google"  # or "github" or "oidc"
+# oauth_provider      = "google" # or "oidc"
 # oauth_client_id     = "your-client-id"
 # oauth_client_secret = "your-client-secret"
-# oauth_issuer_url    = "https://accounts.google.com"  # for OIDC
+# oauth_issuer_url    = "https://login.example.com" # oidc only
+# oauth_email_domain  = "example.com"
 
-# Monitoring
-log_retention_days = 7
+# Operations
+log_retention_days              = 7
+enable_deletion_protection      = true
+secrets_recovery_window_in_days = 7
 
-# Security
-enable_deletion_protection = true
-
-# For development environments, use these cost-optimized settings:
-# environment                      = "development"
+# Trial settings, cheaper and easy to destroy:
+# environment                      = "trial"
 # ecs_desired_count                = 1
 # ecs_task_cpu                     = 512
 # ecs_task_memory                  = 1024
@@ -54,4 +61,7 @@ enable_deletion_protection = true
 # database_multi_az                = false
 # enable_autoscaling               = false
 # enable_deletion_protection       = false
+# database_deletion_protection     = false
+# database_skip_final_snapshot     = true
 # database_backup_retention_period = 1
+# secrets_recovery_window_in_days  = 0
