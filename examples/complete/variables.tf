@@ -5,59 +5,92 @@ variable "aws_region" {
 }
 
 variable "environment" {
-  description = "Environment name (dev, staging, prod)"
+  description = "Environment name (dev, staging, production)"
   type        = string
   default     = "production"
 }
 
-# VPC Configuration
+# VPC
 variable "vpc_cidr" {
-  description = "CIDR block for VPC"
+  description = "CIDR block for the VPC"
   type        = string
   default     = "10.0.0.0/16"
 }
 
 variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
+  description = "CIDR blocks for the private subnets"
   type        = list(string)
   default     = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 }
 
 variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
+  description = "CIDR blocks for the public subnets"
   type        = list(string)
   default     = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
 }
 
-# Domain Configuration
+# Domain
 variable "domain_name" {
-  description = "Domain name for Stategraph (e.g., stategraph.example.com)"
+  description = "Public host name of Stategraph, for example stategraph.example.com. Null for an HTTP-only trial on the ALB DNS name"
   type        = string
+  default     = null
 }
 
 variable "certificate_arn" {
-  description = "ACM certificate ARN for HTTPS"
+  description = "ACM certificate ARN for HTTPS. Requires domain_name"
   type        = string
+  default     = null
 }
 
-# Optional: Route53 configuration
-# variable "route53_zone_id" {
-#   description = "Route53 hosted zone ID for DNS record creation"
-#   type        = string
-#   default     = ""
-# }
+variable "route53_zone_id" {
+  description = "Route 53 hosted zone ID. When set, the example creates the alias record for domain_name"
+  type        = string
+  default     = null
+}
 
-# ECS Configuration
+# Stategraph
+variable "stategraph_image" {
+  description = "Stategraph server image"
+  type        = string
+  default     = "ghcr.io/stategraph/stategraph-server:3.1.0"
+}
+
+variable "license_key" {
+  description = "Stategraph Enterprise license key. Null: enter it on the setup screen"
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "cost_enabled" {
+  description = "Enable cost estimation"
+  type        = bool
+  default     = false
+}
+
+variable "security_scanning_enabled" {
+  description = "Enable security scanning"
+  type        = bool
+  default     = false
+}
+
+# ECS
 variable "ecs_task_cpu" {
-  description = "ECS task CPU units"
+  description = "Fargate task CPU units"
   type        = number
   default     = 1024
 }
 
 variable "ecs_task_memory" {
-  description = "ECS task memory in MB"
+  description = "Fargate task memory in MB"
   type        = number
   default     = 2048
+}
+
+variable "cpu_architecture" {
+  description = "CPU architecture of the tasks: X86_64 or ARM64"
+  type        = string
+  default     = "X86_64"
 }
 
 variable "ecs_desired_count" {
@@ -84,13 +117,7 @@ variable "ecs_min_count" {
   default     = 1
 }
 
-variable "stategraph_image" {
-  description = "Stategraph Docker image"
-  type        = string
-  default     = "ghcr.io/stategraph/stategraph-server:latest"
-}
-
-# Database Configuration
+# Database
 variable "database_instance_class" {
   description = "RDS instance class"
   type        = string
@@ -115,15 +142,27 @@ variable "database_allocated_storage" {
   default     = 100
 }
 
-# OAuth Configuration
+variable "database_deletion_protection" {
+  description = "Enable deletion protection on the RDS instance"
+  type        = bool
+  default     = true
+}
+
+variable "database_skip_final_snapshot" {
+  description = "Skip the final RDS snapshot on destroy. Trials only"
+  type        = bool
+  default     = false
+}
+
+# OAuth
 variable "oauth_enabled" {
-  description = "Enable OAuth authentication"
+  description = "Enable Google or OIDC sign-in"
   type        = bool
   default     = false
 }
 
 variable "oauth_provider" {
-  description = "OAuth provider (google, github, oidc)"
+  description = "OAuth provider: google or oidc"
   type        = string
   default     = ""
 }
@@ -132,7 +171,6 @@ variable "oauth_client_id" {
   description = "OAuth client ID"
   type        = string
   default     = ""
-  sensitive   = true
 }
 
 variable "oauth_client_secret" {
@@ -143,21 +181,32 @@ variable "oauth_client_secret" {
 }
 
 variable "oauth_issuer_url" {
-  description = "OAuth issuer URL (for OIDC provider)"
+  description = "OIDC issuer URL, for the oidc provider"
   type        = string
   default     = ""
 }
 
-# Monitoring Configuration
+variable "oauth_email_domain" {
+  description = "Email domain that can sign in. Null: any identity the provider authenticates"
+  type        = string
+  default     = null
+}
+
+# Operations
 variable "log_retention_days" {
   description = "CloudWatch Logs retention period in days"
   type        = number
   default     = 7
 }
 
-# Security Configuration
 variable "enable_deletion_protection" {
-  description = "Enable deletion protection for ALB"
+  description = "Enable deletion protection on the ALB"
   type        = bool
   default     = true
+}
+
+variable "secrets_recovery_window_in_days" {
+  description = "Days Secrets Manager keeps a deleted secret: 0, or 7 to 30"
+  type        = number
+  default     = 7
 }

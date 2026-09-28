@@ -1,3 +1,8 @@
+output "stategraph_url" {
+  description = "URL of the Stategraph console, the value of STATEGRAPH_UI_BASE"
+  value       = local.ui_base
+}
+
 output "ecs_cluster_id" {
   description = "ID of the ECS cluster"
   value       = aws_ecs_cluster.stategraph.id
@@ -18,13 +23,18 @@ output "ecs_service_name" {
   value       = aws_ecs_service.stategraph.name
 }
 
+output "ecs_task_definition_arn" {
+  description = "ARN of the ECS task definition"
+  value       = aws_ecs_task_definition.stategraph.arn
+}
+
 output "alb_dns_name" {
   description = "DNS name of the Application Load Balancer"
   value       = aws_lb.stategraph.dns_name
 }
 
 output "alb_zone_id" {
-  description = "Zone ID of the Application Load Balancer (for Route53 alias records)"
+  description = "Zone ID of the Application Load Balancer, for Route 53 alias records"
   value       = aws_lb.stategraph.zone_id
 }
 
@@ -39,7 +49,7 @@ output "target_group_arn" {
 }
 
 output "database_endpoint" {
-  description = "Endpoint of the RDS database (empty if using external database)"
+  description = "Endpoint of the RDS database, empty with an external database"
   value       = var.create_database ? aws_db_instance.stategraph[0].endpoint : ""
 }
 
@@ -49,12 +59,17 @@ output "database_name" {
 }
 
 output "database_secret_arn" {
-  description = "ARN of the Secrets Manager secret containing database credentials"
+  description = "ARN of the Secrets Manager secret with the database credentials"
   value       = aws_secretsmanager_secret.database.arn
 }
 
+output "stategraph_secret_arn" {
+  description = "ARN of the Secrets Manager secret with the cookie secret, the license key, and the OAuth client secret"
+  value       = aws_secretsmanager_secret.stategraph.arn
+}
+
 output "cloudwatch_log_group_name" {
-  description = "Name of the CloudWatch Log Group for ECS container logs"
+  description = "Name of the CloudWatch Log Group for the container logs"
   value       = aws_cloudwatch_log_group.stategraph.name
 }
 
@@ -69,7 +84,7 @@ output "security_group_ecs_id" {
 }
 
 output "security_group_rds_id" {
-  description = "ID of the RDS security group (empty if using external database)"
+  description = "ID of the RDS security group, empty with an external database"
   value       = var.create_database ? aws_security_group.rds[0].id : ""
 }
 

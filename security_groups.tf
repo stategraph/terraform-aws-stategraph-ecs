@@ -1,4 +1,4 @@
-# Security Group for Application Load Balancer
+# Application Load Balancer
 resource "aws_security_group" "alb" {
   name        = "stategraph-alb-${var.environment}"
   description = "Security group for Stategraph Application Load Balancer"
@@ -13,29 +13,30 @@ resource "aws_security_group" "alb" {
   )
 }
 
-# Allow HTTP traffic from internet
 resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+  for_each = toset(var.alb_ingress_cidrs)
+
   security_group_id = aws_security_group.alb.id
-  description       = "Allow HTTP from internet"
+  description       = "Allow HTTP"
 
   from_port   = 80
   to_port     = 80
   ip_protocol = "tcp"
-  cidr_ipv4   = "0.0.0.0/0"
+  cidr_ipv4   = each.value
 }
 
-# Allow HTTPS traffic from internet
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
+  for_each = var.certificate_arn != null ? toset(var.alb_ingress_cidrs) : toset([])
+
   security_group_id = aws_security_group.alb.id
-  description       = "Allow HTTPS from internet"
+  description       = "Allow HTTPS"
 
   from_port   = 443
   to_port     = 443
   ip_protocol = "tcp"
-  cidr_ipv4   = "0.0.0.0/0"
+  cidr_ipv4   = each.value
 }
 
-# Allow all outbound traffic from ALB
 resource "aws_vpc_security_group_egress_rule" "alb_all" {
   security_group_id = aws_security_group.alb.id
   description       = "Allow all outbound traffic"
@@ -44,7 +45,7 @@ resource "aws_vpc_security_group_egress_rule" "alb_all" {
   cidr_ipv4   = "0.0.0.0/0"
 }
 
-# Security Group for ECS Tasks
+# ECS tasks
 resource "aws_security_group" "ecs" {
   name        = "stategraph-ecs-${var.environment}"
   description = "Security group for Stategraph ECS tasks"
@@ -59,21 +60,19 @@ resource "aws_security_group" "ecs" {
   )
 }
 
-# Allow traffic from ALB to ECS tasks
 resource "aws_vpc_security_group_ingress_rule" "ecs_from_alb" {
   security_group_id = aws_security_group.ecs.id
   description       = "Allow traffic from ALB"
 
-  from_port                    = var.container_port
-  to_port                      = var.container_port
+  from_port                    = local.container_port
+  to_port                      = local.container_port
   ip_protocol                  = "tcp"
   referenced_security_group_id = aws_security_group.alb.id
 }
 
-# Allow HTTPS outbound for external API calls
 resource "aws_vpc_security_group_egress_rule" "ecs_https" {
   security_group_id = aws_security_group.ecs.id
-  description       = "Allow HTTPS outbound for external APIs"
+  description       = "Allow HTTPS outbound for the image registry and external APIs"
 
   from_port   = 443
   to_port     = 443
@@ -81,7 +80,6 @@ resource "aws_vpc_security_group_egress_rule" "ecs_https" {
   cidr_ipv4   = "0.0.0.0/0"
 }
 
-# Allow DNS outbound
 resource "aws_vpc_security_group_egress_rule" "ecs_dns" {
   security_group_id = aws_security_group.ecs.id
   description       = "Allow DNS queries"
@@ -92,20 +90,18 @@ resource "aws_vpc_security_group_egress_rule" "ecs_dns" {
   cidr_ipv4   = "0.0.0.0/0"
 }
 
-# Allow PostgreSQL outbound to RDS (if using managed RDS)
 resource "aws_vpc_security_group_egress_rule" "ecs_postgres" {
   count = var.create_database ? 1 : 0
 
   security_group_id = aws_security_group.ecs.id
   description       = "Allow PostgreSQL to RDS"
 
-  from_port                    = 5432
-  to_port                      = 5432
+  from_port                    = aws_db_instance.stategraph[0].port
+  to_port                      = aws_db_instance.stategraph[0].port
   ip_protocol                  = "tcp"
   referenced_security_group_id = aws_security_group.rds[0].id
 }
 
-# Allow PostgreSQL outbound to external database (if using external DB)
 resource "aws_vpc_security_group_egress_rule" "ecs_external_postgres" {
   count = var.create_database ? 0 : 1
 
@@ -118,7 +114,7 @@ resource "aws_vpc_security_group_egress_rule" "ecs_external_postgres" {
   cidr_ipv4   = "0.0.0.0/0"
 }
 
-# Security Group for RDS (only created if using managed RDS)
+# RDS
 resource "aws_security_group" "rds" {
   count = var.create_database ? 1 : 0
 
@@ -135,17 +131,14 @@ resource "aws_security_group" "rds" {
   )
 }
 
-# Allow PostgreSQL traffic from ECS tasks only
 resource "aws_vpc_security_group_ingress_rule" "rds_from_ecs" {
   count = var.create_database ? 1 : 0
 
   security_group_id = aws_security_group.rds[0].id
   description       = "Allow PostgreSQL from ECS tasks"
 
-  from_port                    = 5432
-  to_port                      = 5432
+  from_port                    = aws_db_instance.stategraph[0].port
+  to_port                      = aws_db_instance.stategraph[0].port
   ip_protocol                  = "tcp"
   referenced_security_group_id = aws_security_group.ecs.id
 }
-
-# No outbound rules needed for RDS (it doesn't initiate connections)
