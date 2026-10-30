@@ -52,7 +52,7 @@ variable "route53_zone_id" {
 variable "stategraph_image" {
   description = "Stategraph server image"
   type        = string
-  default     = "ghcr.io/stategraph/stategraph-server:3.1.0"
+  default     = "ghcr.io/stategraph/stategraph-server:3.2.19"
 }
 
 variable "license_key" {

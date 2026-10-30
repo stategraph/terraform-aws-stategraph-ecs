@@ -251,7 +251,7 @@ The `stategraph` database must exist before the first start. The tasks need netw
 Change the image tag and apply. ECS does a rolling deployment, and the ALB routes only to tasks that answer `/health/ready`:
 
 ```hcl
-stategraph_image = "ghcr.io/stategraph/stategraph-server:3.1.0"
+stategraph_image = "ghcr.io/stategraph/stategraph-server:3.2.19"
 ```
 
 Read the release notes of the versions that you skip on the [releases page](https://github.com/stategraph/releases/releases). See [Upgrades](https://stategraph.com/docs/admin/operations/upgrades).
@@ -440,7 +440,7 @@ No modules.
 | <a name="input_public_subnet_ids"></a> [public\_subnet\_ids](#input\_public\_subnet\_ids) | Subnet IDs for the Application Load Balancer. Public subnets for an internet-facing ALB, private subnets when alb\_internal is true | `list(string)` | n/a | yes |
 | <a name="input_secrets_recovery_window_in_days"></a> [secrets\_recovery\_window\_in\_days](#input\_secrets\_recovery\_window\_in\_days) | Days Secrets Manager keeps a deleted secret before it removes it: 0 for at once, or 7 to 30. Use 0 for trials that are created and destroyed often | `number` | `7` | no |
 | <a name="input_security_scanning_enabled"></a> [security\_scanning\_enabled](#input\_security\_scanning\_enabled) | Enable security scanning of states with checkov | `bool` | `false` | no |
-| <a name="input_stategraph_image"></a> [stategraph\_image](#input\_stategraph\_image) | Stategraph server image. Pin a release tag in production | `string` | `"ghcr.io/stategraph/stategraph-server:3.1.0"` | no |
+| <a name="input_stategraph_image"></a> [stategraph\_image](#input\_stategraph\_image) | Stategraph server image. Pin a release tag in production | `string` | `"ghcr.io/stategraph/stategraph-server:3.2.19"` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | `{}` | no |
 | <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | VPC ID where Stategraph is deployed | `string` | n/a | yes |
 
