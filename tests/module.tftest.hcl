@@ -96,8 +96,8 @@ run "defaults" {
   }
 
   assert {
-    condition     = jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].image == "ghcr.io/stategraph/stategraph-server:3.1.0"
-    error_message = "The default image must pin the 3.1.0 release."
+    condition     = jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].image == "ghcr.io/stategraph/stategraph-server:3.2.19"
+    error_message = "The default image must pin the current server release."
   }
 
   assert {

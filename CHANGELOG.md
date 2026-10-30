@@ -11,7 +11,7 @@ Planned as 2.0.0. The module now follows the Stategraph 3.x server contract.
 
 ### Changed
 
-- The default image is `ghcr.io/stategraph/stategraph-server:3.1.0`. Pin a release tag in production.
+- The default image pins the current server release, and each server release moves it. Pin a release tag in production.
 - OAuth settings set `STATEGRAPH_OAUTH_TYPE`, `STATEGRAPH_OAUTH_CLIENT_ID`, `STATEGRAPH_OAUTH_CLIENT_SECRET`, `STATEGRAPH_OAUTH_OIDC_ISSUER_URL`, and `STATEGRAPH_OAUTH_REDIRECT_BASE`, the names the server reads. The `github` provider is removed: the server supports `google` and `oidc`.
 - The `stategraph-oauth-<environment>` secret is replaced by `stategraph-server-<environment>`, which holds the cookie secret, the license key, and the OAuth client secret.
 - The ALB target group probes `/health/ready`, the container probes `/health/live` with a 120 second start period, and the ECS service has a 300 second health check grace period.
