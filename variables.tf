@@ -41,7 +41,7 @@ variable "environment" {
 variable "stategraph_image" {
   description = "Stategraph server image. Pin a release tag in production"
   type        = string
-  default     = "ghcr.io/stategraph/stategraph-server:3.2.26"
+  default     = "ghcr.io/stategraph/stategraph-server:3.2.27"
 }
 
 variable "license_key" {
