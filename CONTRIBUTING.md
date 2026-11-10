@@ -103,11 +103,15 @@ This module follows [Semantic Versioning](https://semver.org/):
 
 ## Release process
 
-Releases are managed by maintainers:
+A merge that adds a version to CHANGELOG.md releases it: the module repository
+tags the top version and publishes a GitHub release with its section as notes.
 
-1. Move the `[Unreleased]` entries in CHANGELOG.md under the new version
-2. Update the `ref` in the README and example module blocks
-3. Create the Git tag
+- A new Stategraph server release moves the `stategraph_version` default in a
+  PR that the release workflow opens. With nothing under `[Unreleased]`, that
+  PR adds a patch version and updates the `ref` in the README and example
+  module blocks.
+- For any other release, move the `[Unreleased]` entries under the new version
+  and update the `ref` in the README and example module blocks in the same PR.
 
 ## Questions?
 
