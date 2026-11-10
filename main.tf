@@ -15,6 +15,10 @@ locals {
   db_name = var.create_database ? aws_db_instance.stategraph[0].db_name : var.external_database_name
 
   license_key_set = nonsensitive(var.license_key != null)
+  stategraph_image = coalesce(
+    var.stategraph_image,
+    "${var.edition == "enterprise" ? "ghcr.io/stategraph/stategraph-server" : "ghcr.io/stategraph/stategraph-server-oss"}:${var.stategraph_version}",
+  )
 
   tags = merge(
     var.tags,
@@ -340,7 +344,7 @@ resource "aws_ecs_task_definition" "stategraph" {
   # hostPort and the empty collections match what ECS stores, so plans stay quiet.
   container_definitions = jsonencode([{
     name        = "stategraph"
-    image       = var.stategraph_image
+    image       = local.stategraph_image
     essential   = true
     stopTimeout = var.container_stop_timeout
 

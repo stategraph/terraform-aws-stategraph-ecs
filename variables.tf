@@ -38,14 +38,31 @@ variable "environment" {
 }
 
 # Stategraph
-variable "stategraph_image" {
-  description = "Stategraph server image. Pin a release tag in production"
+variable "edition" {
+  description = "Stategraph edition: oss or enterprise. It selects the server image. Enterprise also needs a license key, in license_key or entered on the setup screen"
   type        = string
-  default     = "ghcr.io/stategraph/stategraph-server:3.2.28"
+  default     = "oss"
+
+  validation {
+    condition     = contains(["oss", "enterprise"], var.edition)
+    error_message = "edition must be oss or enterprise."
+  }
+}
+
+variable "stategraph_version" {
+  description = "Stategraph release of the server image. Each server release moves the default. Pin a release in production"
+  type        = string
+  default     = "3.2.28"
+}
+
+variable "stategraph_image" {
+  description = "Server image reference. Null: the image of the edition at stategraph_version"
+  type        = string
+  default     = null
 }
 
 variable "license_key" {
-  description = "Stategraph Enterprise license key, stored in Secrets Manager and passed as STATEGRAPH_LICENSE_KEY. When null, the setup screen asks for the key"
+  description = "Stategraph Enterprise license key, stored in Secrets Manager and passed as STATEGRAPH_LICENSE_KEY, with edition = enterprise. Null: the Enterprise setup screen asks for the key"
   type        = string
   default     = null
   sensitive   = true

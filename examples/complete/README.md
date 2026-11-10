@@ -12,7 +12,7 @@ This example deploys Stategraph on AWS ECS with a new VPC. It uses the module fr
 
 1. An AWS account with permissions for ECS, RDS, ALB, IAM, Secrets Manager, CloudWatch, and VPC
 2. Terraform 1.3 or later, or OpenTofu
-3. A Stategraph Enterprise license key, or the intent to enter it on the setup screen
+3. For Enterprise: `edition = "enterprise"`, and a Stategraph license key, or the intent to enter it on the setup screen
 4. For HTTPS: a domain name and an ACM certificate for it in the deployment region
 
 ## Quick start
@@ -98,7 +98,7 @@ aws ecs describe-services \
 
 ## Upgrading
 
-Set `stategraph_image` in `terraform.tfvars` to the new tag and apply. ECS does a rolling deployment.
+Set `stategraph_version` in `terraform.tfvars` to the new release and apply. ECS does a rolling deployment.
 
 ## Cleanup
 
