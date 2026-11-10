@@ -96,8 +96,8 @@ run "defaults" {
   }
 
   assert {
-    condition     = jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].image == "ghcr.io/stategraph/stategraph-server:3.2.28"
-    error_message = "The default image must pin the current server release."
+    condition     = jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].image == "ghcr.io/stategraph/stategraph-server-oss:${var.stategraph_version}"
+    error_message = "The default edition must deploy the Open Source image at stategraph_version."
   }
 
   assert {
@@ -254,6 +254,7 @@ run "features" {
   variables {
     domain_name               = "stategraph.example.com"
     certificate_arn           = "arn:aws:acm:us-east-1:123456789012:certificate/0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"
+    edition                   = "enterprise"
     license_key               = "license-key-value"
     oauth_enabled             = true
     oauth_provider            = "google"
@@ -269,6 +270,11 @@ run "features" {
     extra_secrets = [
       { name = "GITHUB_APP_PEM", value_from = "arn:aws:secretsmanager:us-east-1:123456789012:secret:stategraph/github-app-AbCdEf:pem::" },
     ]
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].image == "ghcr.io/stategraph/stategraph-server:${var.stategraph_version}"
+    error_message = "edition = enterprise must select the Enterprise image."
   }
 
   assert {
@@ -418,4 +424,41 @@ run "restricted_alb" {
     condition     = aws_ecs_task_definition.stategraph.runtime_platform[0].cpu_architecture == "ARM64"
     error_message = "cpu_architecture must set the task runtime platform."
   }
+}
+
+run "license_key_without_edition" {
+  command = plan
+
+  variables {
+    license_key = "license-key-value"
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].image == "ghcr.io/stategraph/stategraph-server-oss:${var.stategraph_version}"
+    error_message = "A license key alone must not change the edition."
+  }
+}
+
+run "explicit_image" {
+  command = plan
+
+  variables {
+    license_key      = "license-key-value"
+    stategraph_image = "registry.example.com/mirror/stategraph-server:3.2.0"
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].image == "registry.example.com/mirror/stategraph-server:3.2.0"
+    error_message = "stategraph_image must win over the edition."
+  }
+}
+
+run "invalid_edition" {
+  command = plan
+
+  variables {
+    edition = "pro"
+  }
+
+  expect_failures = [var.edition]
 }

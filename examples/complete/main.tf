@@ -53,8 +53,9 @@ module "stategraph" {
 
   environment = var.environment
 
-  stategraph_image = var.stategraph_image
-  license_key      = var.license_key
+  edition            = var.edition
+  stategraph_version = var.stategraph_version
+  license_key        = var.license_key
 
   ecs_task_cpu       = var.ecs_task_cpu
   ecs_task_memory    = var.ecs_task_memory

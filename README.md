@@ -1,6 +1,6 @@
 # Stategraph ECS Terraform Module
 
-Deploy the Stategraph Enterprise server on AWS ECS Fargate, behind an Application Load Balancer, with RDS PostgreSQL. The module implements the [Amazon ECS self-hosting guide](https://stategraph.com/docs/admin/self-hosting/ecs).
+Deploy the Stategraph server, Open Source or Enterprise, on AWS ECS Fargate, behind an Application Load Balancer, with RDS PostgreSQL. The module implements the [Amazon ECS self-hosting guide](https://stategraph.com/docs/admin/self-hosting/ecs).
 
 ## What the module creates
 
@@ -29,14 +29,14 @@ RDS PostgreSQL (private subnets, 5432)
 
 - A VPC with private subnets for the tasks and RDS, behind a NAT gateway, and subnets for the ALB, in at least two availability zones each
 - Terraform 1.3 or later, or OpenTofu, with AWS provider 6.0 or later
-- A Stategraph Enterprise license key. The setup screen asks for it when the module does not pass one. [Contact Stategraph](https://stategraph.com/contact) for a key
+- For Enterprise: `edition = "enterprise"`, and a Stategraph license key. The setup screen asks for it when the module does not pass one. [Contact Stategraph](https://stategraph.com/contact) for a key
 - For HTTPS: a domain name and an ACM certificate for it, in the deployment region
 
 ## Quick start
 
 ```hcl
 module "stategraph" {
-  source = "github.com/stategraph/terraform-aws-stategraph-ecs?ref=v2.0.0"
+  source = "github.com/stategraph/terraform-aws-stategraph-ecs?ref=v3.0.0"
 
   # Network
   vpc_id             = "vpc-xxxxx"
@@ -47,7 +47,9 @@ module "stategraph" {
   domain_name     = "stategraph.example.com"
   certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxx"
 
-  # License key, stored in Secrets Manager
+  # Enterprise: the edition, and the license key, stored in Secrets Manager.
+  # Leave both out for Open Source.
+  edition     = "enterprise"
   license_key = var.stategraph_license_key
 
   environment = "production"
@@ -76,11 +78,22 @@ output "alb_dns_name" {
 curl -f "$(terraform output -raw stategraph_url)/health/ready"
 ```
 
-4. Open the URL and create the first admin account on the setup screen. The screen asks for the license key first when `license_key` is not set.
+4. Open the URL and create the first admin account on the setup screen. On Enterprise, the screen asks for the license key first when `license_key` is not set.
 
 ### Trial without DNS
 
 Leave `domain_name` and `certificate_arn` unset. The ALB then serves HTTP only, and `stategraph_url` is `http://<alb_dns_name>`. Cookies do not get the `Secure` flag, so use this for a trial only. See the [complete example](./examples/complete/) for trial settings that are cheap and easy to destroy.
+
+## Edition
+
+`edition` selects the server image:
+
+| `edition` | Image |
+|-----------|-------|
+| `"oss"` (default) | `ghcr.io/stategraph/stategraph-server-oss:<stategraph_version>` |
+| `"enterprise"` | `ghcr.io/stategraph/stategraph-server:<stategraph_version>` |
+
+A `stategraph_image` that you set wins over the edition. Both images use the same versions and the same database. Enterprise needs a license key, in `license_key` or entered on the setup screen. See [Editions](https://stategraph.com/docs/get-started/editions).
 
 ## First start
 
@@ -248,13 +261,17 @@ The `stategraph` database must exist before the first start. The tasks need netw
 
 ## Upgrading Stategraph
 
-Change the image tag and apply. ECS does a rolling deployment, and the ALB routes only to tasks that answer `/health/ready`:
+Set `stategraph_version` to a release and apply. ECS does a rolling deployment, and the ALB routes only to tasks that answer `/health/ready`:
 
 ```hcl
-stategraph_image = "ghcr.io/stategraph/stategraph-server:3.2.28"
+stategraph_version = "<version>"
 ```
 
 Read the release notes of the versions that you skip on the [releases page](https://github.com/stategraph/releases/releases). See [Upgrades](https://stategraph.com/docs/admin/operations/upgrades).
+
+## Upgrading the module from 2.x
+
+Version 3.0.0 runs the Open Source image by default. An Enterprise deployment sets `edition = "enterprise"` before it applies the upgrade. `stategraph_version` sets the release, and `stategraph_image` defaults to null. A `stategraph_image` that you set still wins.
 
 ## Upgrading the module from 1.x
 
@@ -410,6 +427,7 @@ No modules.
 | <a name="input_ecs_task_cpu"></a> [ecs\_task\_cpu](#input\_ecs\_task\_cpu) | Fargate task CPU units (256, 512, 1024, 2048, 4096) | `number` | `1024` | no |
 | <a name="input_ecs_task_memory"></a> [ecs\_task\_memory](#input\_ecs\_task\_memory) | Fargate task memory in MB (512, 1024, 2048, 4096, 8192, 16384, 30720) | `number` | `2048` | no |
 | <a name="input_ecs_task_role_policy_arns"></a> [ecs\_task\_role\_policy\_arns](#input\_ecs\_task\_role\_policy\_arns) | IAM policy ARNs to attach to the task role, for example ReadOnlyAccess for gap analysis of the AWS account | `list(string)` | `[]` | no |
+| <a name="input_edition"></a> [edition](#input\_edition) | Stategraph edition: oss or enterprise. It selects the server image. Enterprise also needs a license key, in license\_key or entered on the setup screen | `string` | `"oss"` | no |
 | <a name="input_enable_autoscaling"></a> [enable\_autoscaling](#input\_enable\_autoscaling) | Enable ECS autoscaling on CPU and memory | `bool` | `true` | no |
 | <a name="input_enable_deletion_protection"></a> [enable\_deletion\_protection](#input\_enable\_deletion\_protection) | Enable deletion protection on the ALB | `bool` | `true` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Environment name, used in every resource name. Lowercase letters, digits, and hyphens, at most 21 characters | `string` | `"production"` | no |
@@ -426,7 +444,7 @@ No modules.
 | <a name="input_health_check_path"></a> [health\_check\_path](#input\_health\_check\_path) | ALB target group health check path. /health/ready answers 200 only when the server has migrated and serves requests | `string` | `"/health/ready"` | no |
 | <a name="input_health_check_timeout"></a> [health\_check\_timeout](#input\_health\_check\_timeout) | Health check timeout in seconds, for the ALB and the container | `number` | `5` | no |
 | <a name="input_health_check_unhealthy_threshold"></a> [health\_check\_unhealthy\_threshold](#input\_health\_check\_unhealthy\_threshold) | Consecutive health check failures before a target is unhealthy, for the ALB and the container | `number` | `5` | no |
-| <a name="input_license_key"></a> [license\_key](#input\_license\_key) | Stategraph Enterprise license key, stored in Secrets Manager and passed as STATEGRAPH\_LICENSE\_KEY. When null, the setup screen asks for the key | `string` | `null` | no |
+| <a name="input_license_key"></a> [license\_key](#input\_license\_key) | Stategraph Enterprise license key, stored in Secrets Manager and passed as STATEGRAPH\_LICENSE\_KEY, with edition = enterprise. Null: the Enterprise setup screen asks for the key | `string` | `null` | no |
 | <a name="input_log_retention_days"></a> [log\_retention\_days](#input\_log\_retention\_days) | CloudWatch Logs retention period in days | `number` | `7` | no |
 | <a name="input_oauth_client_id"></a> [oauth\_client\_id](#input\_oauth\_client\_id) | OAuth client ID | `string` | `""` | no |
 | <a name="input_oauth_client_secret"></a> [oauth\_client\_secret](#input\_oauth\_client\_secret) | OAuth client secret, stored in Secrets Manager | `string` | `""` | no |
@@ -440,7 +458,8 @@ No modules.
 | <a name="input_public_subnet_ids"></a> [public\_subnet\_ids](#input\_public\_subnet\_ids) | Subnet IDs for the Application Load Balancer. Public subnets for an internet-facing ALB, private subnets when alb\_internal is true | `list(string)` | n/a | yes |
 | <a name="input_secrets_recovery_window_in_days"></a> [secrets\_recovery\_window\_in\_days](#input\_secrets\_recovery\_window\_in\_days) | Days Secrets Manager keeps a deleted secret before it removes it: 0 for at once, or 7 to 30. Use 0 for trials that are created and destroyed often | `number` | `7` | no |
 | <a name="input_security_scanning_enabled"></a> [security\_scanning\_enabled](#input\_security\_scanning\_enabled) | Enable security scanning of states with checkov | `bool` | `false` | no |
-| <a name="input_stategraph_image"></a> [stategraph\_image](#input\_stategraph\_image) | Stategraph server image. Pin a release tag in production | `string` | `"ghcr.io/stategraph/stategraph-server:3.2.28"` | no |
+| <a name="input_stategraph_image"></a> [stategraph\_image](#input\_stategraph\_image) | Server image reference. Null: the image of the edition at stategraph\_version | `string` | `null` | no |
+| <a name="input_stategraph_version"></a> [stategraph\_version](#input\_stategraph\_version) | Stategraph release of the server image. Each server release moves the default. Pin a release in production | `string` | `"3.2.28"` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | `{}` | no |
 | <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | VPC ID where Stategraph is deployed | `string` | n/a | yes |
 

@@ -49,14 +49,20 @@ variable "route53_zone_id" {
 }
 
 # Stategraph
-variable "stategraph_image" {
-  description = "Stategraph server image"
+variable "edition" {
+  description = "Stategraph edition: oss or enterprise"
   type        = string
-  default     = "ghcr.io/stategraph/stategraph-server:3.2.28"
+  default     = "oss"
+}
+
+variable "stategraph_version" {
+  description = "Stategraph release of the server image"
+  type        = string
+  default     = "3.2.28"
 }
 
 variable "license_key" {
-  description = "Stategraph Enterprise license key. Null: enter it on the setup screen"
+  description = "Stategraph Enterprise license key, with edition = enterprise. Null: the setup screen asks for it"
   type        = string
   default     = null
   sensitive   = true
