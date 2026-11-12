@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-11-12
+
+### Changed
+
+- The default `stategraph_version` is 3.2.30.
+
 ## [3.0.0] - 2026-11-10
 
 Breaking: the module runs the Open Source image by default.
@@ -91,7 +97,8 @@ The module now follows the Stategraph 3.x server contract.
 - Zero-downtime rolling deployments
 - Automatic secret rotation support
 
-[Unreleased]: https://github.com/stategraph/terraform-aws-stategraph-ecs/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/stategraph/terraform-aws-stategraph-ecs/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/stategraph/terraform-aws-stategraph-ecs/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/stategraph/terraform-aws-stategraph-ecs/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/stategraph/terraform-aws-stategraph-ecs/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/stategraph/terraform-aws-stategraph-ecs/releases/tag/v1.0.0
