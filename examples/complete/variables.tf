@@ -58,7 +58,7 @@ variable "edition" {
 variable "stategraph_version" {
   description = "Stategraph release of the server image"
   type        = string
-  default     = "3.2.30"
+  default     = "3.2.31"
 }
 
 variable "license_key" {
