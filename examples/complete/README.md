@@ -76,7 +76,7 @@ Remove the `vpc` module and pass your subnets to the `stategraph` module:
 
 ```hcl
 module "stategraph" {
-  source = "github.com/stategraph/terraform-aws-stategraph-ecs?ref=v3.0.2"
+  source = "github.com/stategraph/terraform-aws-stategraph-ecs?ref=v3.0.3"
 
   vpc_id             = "vpc-xxxxx"
   private_subnet_ids = ["subnet-xxxxx", "subnet-yyyyy"]

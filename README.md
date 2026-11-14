@@ -36,7 +36,7 @@ RDS PostgreSQL (private subnets, 5432)
 
 ```hcl
 module "stategraph" {
-  source = "github.com/stategraph/terraform-aws-stategraph-ecs?ref=v3.0.2"
+  source = "github.com/stategraph/terraform-aws-stategraph-ecs?ref=v3.0.3"
 
   # Network
   vpc_id             = "vpc-xxxxx"
@@ -459,7 +459,7 @@ No modules.
 | <a name="input_secrets_recovery_window_in_days"></a> [secrets\_recovery\_window\_in\_days](#input\_secrets\_recovery\_window\_in\_days) | Days Secrets Manager keeps a deleted secret before it removes it: 0 for at once, or 7 to 30. Use 0 for trials that are created and destroyed often | `number` | `7` | no |
 | <a name="input_security_scanning_enabled"></a> [security\_scanning\_enabled](#input\_security\_scanning\_enabled) | Enable security scanning of states with checkov | `bool` | `false` | no |
 | <a name="input_stategraph_image"></a> [stategraph\_image](#input\_stategraph\_image) | Server image reference. Null: the image of the edition at stategraph\_version | `string` | `null` | no |
-| <a name="input_stategraph_version"></a> [stategraph\_version](#input\_stategraph\_version) | Stategraph release of the server image. Each server release moves the default. Pin a release in production | `string` | `"3.2.31"` | no |
+| <a name="input_stategraph_version"></a> [stategraph\_version](#input\_stategraph\_version) | Stategraph release of the server image. Each server release moves the default. Pin a release in production | `string` | `"3.2.32"` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | `{}` | no |
 | <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | VPC ID where Stategraph is deployed | `string` | n/a | yes |
 
