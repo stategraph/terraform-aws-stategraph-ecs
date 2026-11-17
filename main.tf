@@ -78,7 +78,25 @@ locals {
       { name = "PRICING_DB_USER", valueFrom = "${aws_secretsmanager_secret.database.arn}:username::" },
       { name = "PRICING_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.database.arn}:password::" },
     ] : [],
+    [
+      for s in local.orchestration_secrets : s
+      if !contains(local.extra_names, s.name)
+    ],
     [for s in var.extra_secrets : { name = s.name, valueFrom = s.value_from }],
+  )
+
+  # Orchestration reads its database through postgres_fdw as the application
+  # role. A name that extra_environment or extra_secrets sets wins.
+  orchestration_secrets = var.orchestration_enabled ? [
+    { name = "STATEGRAPH_FDW_USER", valueFrom = "${aws_secretsmanager_secret.database.arn}:username::" },
+    { name = "STATEGRAPH_FDW_PASSWORD", valueFrom = "${aws_secretsmanager_secret.database.arn}:password::" },
+    { name = "STATEGRAPH_FDW_PROVISIONER_USER", valueFrom = "${aws_secretsmanager_secret.database.arn}:username::" },
+    { name = "STATEGRAPH_FDW_PROVISIONER_PASSWORD", valueFrom = "${aws_secretsmanager_secret.database.arn}:password::" },
+  ] : []
+
+  extra_names = concat(
+    [for e in var.extra_environment : e.name],
+    [for s in var.extra_secrets : s.name],
   )
 
   # The secret ARN without a :json-key:: suffix, for the execution role policy.

@@ -111,5 +111,5 @@ This deletes the database. With `database_skip_final_snapshot = false`, the defa
 ## Next steps
 
 - [Import your Terraform state](https://stategraph.com/docs/get-started/quickstart/import-state)
-- [Enable Orchestration](https://stategraph.com/docs/admin/self-hosting/orchestration)
+- [Connect GitHub or GitLab](https://stategraph.com/docs/admin/self-hosting/orchestration)
 - [Gap analysis](https://stategraph.com/docs/infrastructure-as-a-database/query/gap-analysis)

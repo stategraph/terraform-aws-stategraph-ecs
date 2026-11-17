@@ -191,38 +191,31 @@ The module sets `STATEGRAPH_SECURITY=1`. See [Enable security scanning](https://
 
 ## Orchestration
 
-Stategraph Orchestration is off by default. This version of the module has no dedicated variables for it. Turn it on with `extra_environment` and `extra_secrets`, with the variables from [Enable Orchestration](https://stategraph.com/docs/admin/self-hosting/orchestration):
+Stategraph Orchestration is on by default. At the first start, it creates its `terrateam` database on the same RDS instance. Open the console as an instance admin and connect GitHub or GitLab from the **Get Started** page. For GitHub, the console creates the GitHub App and stores it, with no change to the module.
+
+To bring a GitHub App that you manage yourself, pass its credentials:
 
 ```hcl
 module "stategraph" {
   # ...
 
   extra_environment = [
-    { name = "STATEGRAPH_ORCHESTRATION_ENABLED", value = "true" },
-    { name = "TERRAT_API_BASE", value = "https://stategraph.example.com/api" },
-    { name = "TERRAT_UI_BASE", value = "https://stategraph.example.com" },
-    { name = "TERRAT_WEB_BASE_URL", value = "https://stategraph.example.com" },
     { name = "GITHUB_APP_URL", value = "https://github.com/apps/your-app" },
   ]
 
   extra_secrets = [
-    { name = "STATEGRAPH_FDW_PASSWORD", value_from = "${aws_secretsmanager_secret.orchestration.arn}:fdw_password::" },
-    { name = "GITHUB_APP_ID", value_from = "${aws_secretsmanager_secret.orchestration.arn}:github_app_id::" },
-    { name = "GITHUB_APP_CLIENT_ID", value_from = "${aws_secretsmanager_secret.orchestration.arn}:github_app_client_id::" },
-    { name = "GITHUB_APP_CLIENT_SECRET", value_from = "${aws_secretsmanager_secret.orchestration.arn}:github_app_client_secret::" },
-    { name = "GITHUB_APP_PEM", value_from = "${aws_secretsmanager_secret.orchestration.arn}:github_app_pem::" },
-    { name = "GITHUB_WEBHOOK_SECRET", value_from = "${aws_secretsmanager_secret.orchestration.arn}:github_webhook_secret::" },
+    { name = "GITHUB_APP_ID", value_from = "${aws_secretsmanager_secret.github.arn}:app_id::" },
+    { name = "GITHUB_APP_CLIENT_ID", value_from = "${aws_secretsmanager_secret.github.arn}:client_id::" },
+    { name = "GITHUB_APP_CLIENT_SECRET", value_from = "${aws_secretsmanager_secret.github.arn}:client_secret::" },
+    { name = "GITHUB_APP_PEM", value_from = "${aws_secretsmanager_secret.github.arn}:pem::" },
+    { name = "GITHUB_WEBHOOK_SECRET", value_from = "${aws_secretsmanager_secret.github.arn}:webhook_secret::" },
   ]
 }
 ```
 
-On the RDS instance, the master user is a member of `rds_superuser`, so Orchestration creates the `terrateam` database and the `postgres_fdw` bridge at start. Set the password of the read role one time, with the same value as `STATEGRAPH_FDW_PASSWORD`:
-
-```sql
-ALTER ROLE stategraph_mql LOGIN PASSWORD '<fdw-password>';
-```
-
 Then set the webhook URL of the GitHub App to `https://<domain_name>/api/github/v1/events`.
+
+`orchestration_enabled = false` turns Orchestration off.
 
 ## Gap analysis
 
@@ -250,6 +243,8 @@ module "stategraph" {
 ```
 
 The `stategraph` database must exist before the first start. The tasks need network access to the server on the given port. The module stores the credentials in Secrets Manager.
+
+For Orchestration, the user also needs `CREATEDB` and `CREATEROLE`, and superuser rights for the `postgres_fdw` extension (`rds_superuser` on Amazon RDS). Without them, the server runs and Orchestration is unavailable.
 
 ## Network options
 
@@ -454,6 +449,7 @@ No modules.
 | <a name="input_oauth_enabled"></a> [oauth\_enabled](#input\_oauth\_enabled) | Enable Google or OIDC single sign-on. Local email and password sign-in is on when this is false | `bool` | `false` | no |
 | <a name="input_oauth_issuer_url"></a> [oauth\_issuer\_url](#input\_oauth\_issuer\_url) | OIDC issuer URL, required when oauth\_provider is oidc. The provider must serve {issuer}/.well-known/openid-configuration | `string` | `""` | no |
 | <a name="input_oauth_provider"></a> [oauth\_provider](#input\_oauth\_provider) | Sign-in provider when oauth\_enabled is true: google or oidc | `string` | `""` | no |
+| <a name="input_orchestration_enabled"></a> [orchestration\_enabled](#input\_orchestration\_enabled) | Run Stategraph Orchestration: plans and applies from pull requests | `bool` | `true` | no |
 | <a name="input_private_subnet_ids"></a> [private\_subnet\_ids](#input\_private\_subnet\_ids) | Private subnet IDs for the ECS tasks and RDS | `list(string)` | n/a | yes |
 | <a name="input_public_subnet_ids"></a> [public\_subnet\_ids](#input\_public\_subnet\_ids) | Subnet IDs for the Application Load Balancer. Public subnets for an internet-facing ALB, private subnets when alb\_internal is true | `list(string)` | n/a | yes |
 | <a name="input_secrets_recovery_window_in_days"></a> [secrets\_recovery\_window\_in\_days](#input\_secrets\_recovery\_window\_in\_days) | Days Secrets Manager keeps a deleted secret before it removes it: 0 for at once, or 7 to 30. Use 0 for trials that are created and destroyed often | `number` | `7` | no |

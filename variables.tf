@@ -140,6 +140,12 @@ variable "security_scanning_enabled" {
   default     = false
 }
 
+variable "orchestration_enabled" {
+  description = "Run Stategraph Orchestration: plans and applies from pull requests"
+  type        = bool
+  default     = true
+}
+
 variable "extra_environment" {
   description = "Additional environment variables for the server container, for example Orchestration settings"
   type = list(object({
