@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-11-17
+
+### Added
+
+- `orchestration_enabled`, `true` by default: Stategraph Orchestration runs, and reaches its database as the database user of the module. A `STATEGRAPH_FDW_*` variable in `extra_environment` or `extra_secrets` wins.
+
 ## [3.0.4] - 2026-11-17
 
 ### Changed

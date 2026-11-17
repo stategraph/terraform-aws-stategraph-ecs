@@ -139,8 +139,8 @@ run "defaults" {
   }
 
   assert {
-    condition     = toset([for s in jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].secrets : s.name]) == toset(["DB_USER", "DB_PASS", "STATEGRAPH_OAUTH_COOKIE_SECRET"])
-    error_message = "The default secrets must be the database credentials and the cookie secret."
+    condition     = toset([for s in jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].secrets : s.name]) == toset(["DB_USER", "DB_PASS", "STATEGRAPH_OAUTH_COOKIE_SECRET", "STATEGRAPH_FDW_USER", "STATEGRAPH_FDW_PASSWORD", "STATEGRAPH_FDW_PROVISIONER_USER", "STATEGRAPH_FDW_PROVISIONER_PASSWORD"])
+    error_message = "The default secrets must be the database credentials, the cookie secret, and the Orchestration bridge credentials."
   }
 
   assert {
@@ -301,14 +301,18 @@ run "features" {
 
   assert {
     condition = { for s in jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].secrets : s.name => s.valueFrom } == {
-      DB_USER                        = "${aws_secretsmanager_secret.database.arn}:username::"
-      DB_PASS                        = "${aws_secretsmanager_secret.database.arn}:password::"
-      STATEGRAPH_OAUTH_COOKIE_SECRET = "${aws_secretsmanager_secret.stategraph.arn}:cookie_secret::"
-      STATEGRAPH_LICENSE_KEY         = "${aws_secretsmanager_secret.stategraph.arn}:license_key::"
-      STATEGRAPH_OAUTH_CLIENT_SECRET = "${aws_secretsmanager_secret.stategraph.arn}:oauth_client_secret::"
-      PRICING_DB_USER                = "${aws_secretsmanager_secret.database.arn}:username::"
-      PRICING_DB_PASSWORD            = "${aws_secretsmanager_secret.database.arn}:password::"
-      GITHUB_APP_PEM                 = "arn:aws:secretsmanager:us-east-1:123456789012:secret:stategraph/github-app-AbCdEf:pem::"
+      DB_USER                             = "${aws_secretsmanager_secret.database.arn}:username::"
+      DB_PASS                             = "${aws_secretsmanager_secret.database.arn}:password::"
+      STATEGRAPH_OAUTH_COOKIE_SECRET      = "${aws_secretsmanager_secret.stategraph.arn}:cookie_secret::"
+      STATEGRAPH_LICENSE_KEY              = "${aws_secretsmanager_secret.stategraph.arn}:license_key::"
+      STATEGRAPH_OAUTH_CLIENT_SECRET      = "${aws_secretsmanager_secret.stategraph.arn}:oauth_client_secret::"
+      PRICING_DB_USER                     = "${aws_secretsmanager_secret.database.arn}:username::"
+      PRICING_DB_PASSWORD                 = "${aws_secretsmanager_secret.database.arn}:password::"
+      STATEGRAPH_FDW_USER                 = "${aws_secretsmanager_secret.database.arn}:username::"
+      STATEGRAPH_FDW_PASSWORD             = "${aws_secretsmanager_secret.database.arn}:password::"
+      STATEGRAPH_FDW_PROVISIONER_USER     = "${aws_secretsmanager_secret.database.arn}:username::"
+      STATEGRAPH_FDW_PROVISIONER_PASSWORD = "${aws_secretsmanager_secret.database.arn}:password::"
+      GITHUB_APP_PEM                      = "arn:aws:secretsmanager:us-east-1:123456789012:secret:stategraph/github-app-AbCdEf:pem::"
     }
     error_message = "The container secrets must hold exactly the secrets of the enabled features."
   }
@@ -326,6 +330,47 @@ run "features" {
   assert {
     condition     = contains(jsondecode(aws_iam_role_policy.ecs_execution_secrets.policy).Statement[0].Resource, "arn:aws:secretsmanager:us-east-1:123456789012:secret:stategraph/github-app-AbCdEf")
     error_message = "The execution role must read the extra secret, without the json-key suffix."
+  }
+}
+
+run "orchestration_off" {
+  command = apply
+
+  variables {
+    orchestration_enabled = false
+  }
+
+  assert {
+    condition     = length([for s in jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].secrets : s if startswith(s.name, "STATEGRAPH_FDW_")]) == 0
+    error_message = "With orchestration_enabled = false the bridge variables must stay unset."
+  }
+}
+
+run "orchestration_override" {
+  command = apply
+
+  variables {
+    extra_environment = [
+      { name = "STATEGRAPH_FDW_USER", value = "stategraph_mql" },
+    ]
+    extra_secrets = [
+      { name = "STATEGRAPH_FDW_PASSWORD", value_from = "arn:aws:secretsmanager:us-east-1:123456789012:secret:stategraph/fdw-AbCdEf:password::" },
+    ]
+  }
+
+  assert {
+    condition     = !contains([for s in jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].secrets : s.name], "STATEGRAPH_FDW_USER")
+    error_message = "A bridge variable in extra_environment must replace the module's."
+  }
+
+  assert {
+    condition     = [for s in jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].secrets : s.valueFrom if s.name == "STATEGRAPH_FDW_PASSWORD"] == ["arn:aws:secretsmanager:us-east-1:123456789012:secret:stategraph/fdw-AbCdEf:password::"]
+    error_message = "A bridge variable in extra_secrets must replace the module's."
+  }
+
+  assert {
+    condition     = [for s in jsondecode(aws_ecs_task_definition.stategraph.container_definitions)[0].secrets : s.valueFrom if s.name == "STATEGRAPH_FDW_PROVISIONER_USER"] == ["${aws_secretsmanager_secret.database.arn}:username::"]
+    error_message = "The bridge variables that extra_* leaves out must stay."
   }
 }
 
