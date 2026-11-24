@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.3] - 2026-11-24
+
+### Changed
+
+- The default `stategraph_version` is 3.2.42.
+
 ## [3.1.2] - 2026-11-19
 
 ### Changed
